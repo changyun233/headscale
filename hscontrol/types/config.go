@@ -138,6 +138,8 @@ type Config struct {
 
 	Policy PolicyConfig
 
+	Connectivity ConnectivityConfig
+
 	Tuning Tuning
 }
 
@@ -244,6 +246,20 @@ type DERPConfig struct {
 	UpdateFrequency                    time.Duration
 	IPv4                               string
 	IPv6                               string
+}
+
+type ConnectivityConfig struct {
+	Zones           map[string]ConnectivityZoneConfig `mapstructure:"zones"`
+	CrossZoneDirect CrossZoneDirectConfig `mapstructure:"cross_zone_direct"`
+}
+
+type ConnectivityZoneConfig struct {
+	Tags        []string `mapstructure:"tags"`
+	DERPRegions []int    `mapstructure:"derp_regions"`
+}
+
+type CrossZoneDirectConfig struct {
+	Enabled bool
 }
 
 type LogTailConfig struct {
@@ -402,6 +418,7 @@ func LoadConfig(path string, isFile bool) error {
 	viper.SetDefault("derp.server.stun.enabled", true)
 	viper.SetDefault("derp.server.automatically_add_embedded_derp_region", true)
 	viper.SetDefault("derp.update_frequency", "3h")
+	viper.SetDefault("connectivity.cross_zone_direct.enabled", true)
 
 	viper.SetDefault("unix_socket", "/var/run/headscale/headscale.sock")
 	viper.SetDefault("unix_socket_permission", "0o770")
@@ -730,6 +747,24 @@ func derpConfig() DERPConfig {
 		IPv6:                               ipv6,
 		AutomaticallyAddEmbeddedDerpRegion: automaticallyAddEmbeddedDerpRegion,
 	}
+}
+
+func connectivityConfig() (ConnectivityConfig, error) {
+	var cfg ConnectivityConfig
+
+	if viper.IsSet("connectivity") {
+		if err := viper.UnmarshalKey("connectivity", &cfg); err != nil {
+			return ConnectivityConfig{}, fmt.Errorf("unmarshalling connectivity config: %w", err)
+		}
+	}
+
+	if cfg.Zones == nil {
+		cfg.Zones = map[string]ConnectivityZoneConfig{}
+	}
+
+	cfg.CrossZoneDirect.Enabled = viper.GetBool("connectivity.cross_zone_direct.enabled")
+
+	return cfg, nil
 }
 
 func logtailConfig() LogTailConfig {
@@ -1119,6 +1154,11 @@ func LoadServerConfig() (*Config, error) {
 	}
 
 	derpConfig := derpConfig()
+	connConfig, err := connectivityConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	logTailConfig := logtailConfig()
 	randomizeClientPort := viper.GetBool("randomize_client_port")
 
@@ -1226,6 +1266,8 @@ func LoadServerConfig() (*Config, error) {
 		},
 
 		Policy: policyConfig(),
+
+		Connectivity: connConfig,
 
 		CLI: CLIConfig{
 			Address:  viper.GetString("cli.address"),

@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"net/netip"
 	"testing"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"tailscale.com/tailcfg"
+	"tailscale.com/types/key"
+	"tailscale.com/types/views"
 )
 
 func TestMapResponseBuilder_Basic(t *testing.T) {
@@ -138,6 +141,71 @@ func TestMapResponseBuilder_WithDebugConfig(t *testing.T) {
 			assert.False(t, builder.hasErrors())
 		})
 	}
+}
+
+func TestMapResponseBuilder_WithDERPMapFiltersConnectivityZone(t *testing.T) {
+	cfg, st, cleanup := setupConnectivityMapperTest(t)
+	defer cleanup()
+
+	cnNode := createConnectivityNode(t, st, "cn-node", []string{"tag:cn"}, "100.64.0.10", "203.0.113.10:41641")
+	globalNode := createConnectivityNode(t, st, "global-node", []string{"tag:global"}, "100.64.0.20", "198.51.100.20:41641")
+
+	m := &mapper{
+		cfg:   cfg,
+		state: st,
+	}
+
+	cnResp, err := m.NewMapResponseBuilder(cnNode.ID).
+		WithDERPMap().
+		Build()
+	require.NoError(t, err)
+	require.NotNil(t, cnResp.DERPMap)
+	assert.ElementsMatch(t, []int{861}, derpRegionIDs(cnResp.DERPMap))
+
+	globalResp, err := m.NewMapResponseBuilder(globalNode.ID).
+		WithDERPMap().
+		Build()
+	require.NoError(t, err)
+	require.NotNil(t, globalResp.DERPMap)
+	assert.ElementsMatch(t, []int{901, 902}, derpRegionIDs(globalResp.DERPMap))
+}
+
+func TestMapResponseBuilder_WithPeersScrubsCrossZoneDirectCandidates(t *testing.T) {
+	cfg, st, cleanup := setupConnectivityMapperTest(t)
+	defer cleanup()
+
+	cnNode := createConnectivityNode(t, st, "cn-node", []string{"tag:cn"}, "100.64.0.10", "203.0.113.10:41641")
+	cnPeer := createConnectivityNode(t, st, "cn-peer", []string{"tag:cn"}, "100.64.0.11", "203.0.113.11:41641")
+	globalPeer := createConnectivityNode(t, st, "global-peer", []string{"tag:global"}, "100.64.0.20", "198.51.100.20:41641")
+
+	m := &mapper{
+		cfg:   cfg,
+		state: st,
+	}
+
+	resp, err := m.NewMapResponseBuilder(cnNode.ID).
+		WithCapabilityVersion(1).
+		WithPeers(views.SliceOf([]types.NodeView{cnPeer.View(), globalPeer.View()})).
+		Build()
+	require.NoError(t, err)
+	require.Len(t, resp.Peers, 2)
+
+	peers := map[tailcfg.NodeID]*tailcfg.Node{}
+	for _, peer := range resp.Peers {
+		peers[peer.ID] = peer
+	}
+
+	sameZonePeer := peers[tailcfg.NodeID(cnPeer.ID)]
+	require.NotNil(t, sameZonePeer)
+	assert.NotEmpty(t, sameZonePeer.Endpoints)
+	assert.NotEqual(t, key.DiscoPublic{}, sameZonePeer.DiscoKey)
+
+	crossZonePeer := peers[tailcfg.NodeID(globalPeer.ID)]
+	require.NotNil(t, crossZonePeer)
+	assert.Empty(t, crossZonePeer.Endpoints)
+	assert.Equal(t, key.DiscoPublic{}, crossZonePeer.DiscoKey)
+	assert.Equal(t, 861, crossZonePeer.HomeDERP)
+	assert.Equal(t, "127.3.3.40:861", crossZonePeer.LegacyDERPString)
 }
 
 func TestMapResponseBuilder_WithPeerChangedPatch(t *testing.T) {
@@ -344,4 +412,99 @@ func TestMapResponseBuilder_MultipleErrors(t *testing.T) {
 
 	// The error should contain information about multiple errors
 	assert.Contains(t, err.Error(), "multiple errors")
+}
+
+func setupConnectivityMapperTest(t testing.TB) (*types.Config, *state.State, func()) {
+	t.Helper()
+
+	prefixV4 := netip.MustParsePrefix("100.64.0.0/10")
+	prefixV6 := netip.MustParsePrefix("fd7a:115c:a1e0::/48")
+
+	cfg := &types.Config{
+		Database: types.DatabaseConfig{
+			Type: types.DatabaseSqlite,
+			Sqlite: types.SqliteConfig{
+				Path: t.TempDir() + "/headscale_test.db",
+			},
+		},
+		PrefixV4:     &prefixV4,
+		PrefixV6:     &prefixV6,
+		IPAllocation: types.IPAllocationStrategySequential,
+		BaseDomain:   "headscale.test",
+		Policy: types.PolicyConfig{
+			Mode: types.PolicyModeDB,
+		},
+		Taildrop: types.TaildropConfig{
+			Enabled: true,
+		},
+		Connectivity: types.ConnectivityConfig{
+			Zones: map[string]types.ConnectivityZoneConfig{
+				"cn": {
+					Tags:        []string{"tag:cn"},
+					DERPRegions: []int{861},
+				},
+				"global": {
+					Tags:        []string{"tag:global"},
+					DERPRegions: []int{901, 902},
+				},
+			},
+			CrossZoneDirect: types.CrossZoneDirectConfig{
+				Enabled: false,
+			},
+		},
+		Tuning: types.Tuning{
+			NodeStoreBatchSize:    state.TestBatchSize,
+			NodeStoreBatchTimeout: state.TestBatchTimeout,
+		},
+	}
+
+	st, err := state.NewState(cfg)
+	require.NoError(t, err)
+
+	st.SetDERPMap(&tailcfg.DERPMap{
+		Regions: map[int]*tailcfg.DERPRegion{
+			861: {RegionID: 861, RegionCode: "cn", RegionName: "China"},
+			901: {RegionID: 901, RegionCode: "hk", RegionName: "Hong Kong"},
+			902: {RegionID: 902, RegionCode: "jp", RegionName: "Japan"},
+		},
+	})
+
+	return cfg, st, func() {
+		require.NoError(t, st.Close())
+	}
+}
+
+func createConnectivityNode(
+	t testing.TB,
+	st *state.State,
+	hostname string,
+	tags []string,
+	tailnetIP string,
+	endpoint string,
+) *types.Node {
+	t.Helper()
+
+	user := st.CreateUserForTest(hostname + "-user")
+	node := st.CreateRegisteredNodeForTest(user, hostname)
+	node.Tags = tags
+	node.IPv4 = ptr(netip.MustParseAddr(tailnetIP))
+	node.Endpoints = []netip.AddrPort{netip.MustParseAddrPort(endpoint)}
+	node.DiscoKey = key.NewDisco().Public()
+
+	st.PutNodeInStoreForTest(*node)
+
+	return node
+}
+
+func derpRegionIDs(dm *tailcfg.DERPMap) []int {
+	ids := make([]int, 0, len(dm.Regions))
+	for id := range dm.Regions {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }

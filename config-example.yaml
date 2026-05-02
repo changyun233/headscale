@@ -142,6 +142,25 @@ derp:
   # How often should we check for DERP updates?
   update_frequency: 3h
 
+# Connectivity zones are an optional Headscale fork extension for deployments
+# that must constrain DERP visibility and direct peer candidates by node tag.
+# Nodes without a matching tag keep the unfiltered DERP map and normal direct
+# connection behavior.
+connectivity:
+  zones: {}
+  # Example:
+  # zones:
+  #   cn:
+  #     tags: ["tag:cn"]
+  #     derp_regions: [861]
+  #   global:
+  #     tags: ["tag:global"]
+  #     derp_regions: [901, 902, 903]
+  cross_zone_direct:
+    # Set to false to remove Endpoints and DiscoKey from cross-zone peers, forcing
+    # them onto DERP instead of attempting direct UDP/NAT traversal.
+    enabled: true
+
 # Disables the automatic check for headscale updates on startup
 disable_check_updates: false
 

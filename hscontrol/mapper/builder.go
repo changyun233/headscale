@@ -105,7 +105,18 @@ func (b *MapResponseBuilder) WithDebugType(t debugType) *MapResponseBuilder {
 
 // WithDERPMap adds the DERP map to the response.
 func (b *MapResponseBuilder) WithDERPMap() *MapResponseBuilder {
-	b.resp.DERPMap = b.mapper.state.DERPMap().AsStruct()
+	node, ok := b.mapper.state.GetNodeByID(b.nodeID)
+	if !ok {
+		b.addError(ErrNodeNotFoundMapper)
+		return b
+	}
+
+	b.resp.DERPMap = filterDERPMapForNode(
+		b.mapper.state.DERPMap().AsStruct(),
+		b.mapper.cfg.Connectivity,
+		node,
+	)
+
 	return b
 }
 
@@ -264,6 +275,12 @@ func (b *MapResponseBuilder) buildTailPeers(peers views.Slice[types.NodeView]) (
 		}, b.mapper.cfg)
 		if err != nil {
 			return nil, err
+		}
+
+		if !b.mapper.cfg.Connectivity.CrossZoneDirect.Enabled {
+			if requesterZone, ok := crossZonePeer(b.mapper.cfg.Connectivity, node, peer); ok {
+				scrubCrossZonePeer(tn, requesterZone)
+			}
 		}
 
 		tailPeers = append(tailPeers, tn)
