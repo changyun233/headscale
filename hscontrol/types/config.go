@@ -249,8 +249,9 @@ type DERPConfig struct {
 }
 
 type ConnectivityConfig struct {
+	DefaultZone     string                            `mapstructure:"default_zone"`
 	Zones           map[string]ConnectivityZoneConfig `mapstructure:"zones"`
-	CrossZoneDirect CrossZoneDirectConfig `mapstructure:"cross_zone_direct"`
+	CrossZoneDirect CrossZoneDirectConfig             `mapstructure:"cross_zone_direct"`
 }
 
 type ConnectivityZoneConfig struct {
@@ -418,6 +419,7 @@ func LoadConfig(path string, isFile bool) error {
 	viper.SetDefault("derp.server.stun.enabled", true)
 	viper.SetDefault("derp.server.automatically_add_embedded_derp_region", true)
 	viper.SetDefault("derp.update_frequency", "3h")
+	viper.SetDefault("connectivity.default_zone", "")
 	viper.SetDefault("connectivity.cross_zone_direct.enabled", true)
 
 	viper.SetDefault("unix_socket", "/var/run/headscale/headscale.sock")
@@ -762,6 +764,7 @@ func connectivityConfig() (ConnectivityConfig, error) {
 		cfg.Zones = map[string]ConnectivityZoneConfig{}
 	}
 
+	cfg.DefaultZone = viper.GetString("connectivity.default_zone")
 	cfg.CrossZoneDirect.Enabled = viper.GetBool("connectivity.cross_zone_direct.enabled")
 
 	return cfg, nil

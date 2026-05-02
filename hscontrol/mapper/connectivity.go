@@ -29,6 +29,12 @@ func zoneForNode(cfg types.ConnectivityConfig, node types.NodeView) (string, typ
 		}
 	}
 
+	if cfg.DefaultZone != "" {
+		if zone, ok := cfg.Zones[cfg.DefaultZone]; ok {
+			return cfg.DefaultZone, zone, true
+		}
+	}
+
 	return "", types.ConnectivityZoneConfig{}, false
 }
 

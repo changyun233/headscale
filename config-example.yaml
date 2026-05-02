@@ -143,10 +143,12 @@ derp:
   update_frequency: 3h
 
 # Connectivity zones are an optional Headscale fork extension for deployments
-# that must constrain DERP visibility and direct peer candidates by node tag.
-# Nodes without a matching tag keep the unfiltered DERP map and normal direct
-# connection behavior.
+# that must constrain DERP visibility and direct peer candidates by node tag or
+# by a default zone for unmatched nodes. Nodes without a matching tag keep the
+# unfiltered DERP map and normal direct connection behavior unless default_zone
+# is set.
 connectivity:
+  # default_zone: cn
   zones: {}
   # Example:
   # zones:

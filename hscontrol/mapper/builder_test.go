@@ -170,6 +170,26 @@ func TestMapResponseBuilder_WithDERPMapFiltersConnectivityZone(t *testing.T) {
 	assert.ElementsMatch(t, []int{901, 902}, derpRegionIDs(globalResp.DERPMap))
 }
 
+func TestMapResponseBuilder_WithDERPMapFiltersDefaultConnectivityZone(t *testing.T) {
+	cfg, st, cleanup := setupConnectivityMapperTest(t)
+	defer cleanup()
+
+	cfg.Connectivity.DefaultZone = "cn"
+	untaggedNode := createConnectivityNode(t, st, "default-node", nil, "100.64.0.30", "203.0.113.30:41641")
+
+	m := &mapper{
+		cfg:   cfg,
+		state: st,
+	}
+
+	resp, err := m.NewMapResponseBuilder(untaggedNode.ID).
+		WithDERPMap().
+		Build()
+	require.NoError(t, err)
+	require.NotNil(t, resp.DERPMap)
+	assert.ElementsMatch(t, []int{861}, derpRegionIDs(resp.DERPMap))
+}
+
 func TestMapResponseBuilder_WithPeersScrubsCrossZoneDirectCandidates(t *testing.T) {
 	cfg, st, cleanup := setupConnectivityMapperTest(t)
 	defer cleanup()
@@ -206,6 +226,33 @@ func TestMapResponseBuilder_WithPeersScrubsCrossZoneDirectCandidates(t *testing.
 	assert.Equal(t, key.DiscoPublic{}, crossZonePeer.DiscoKey)
 	assert.Equal(t, 861, crossZonePeer.HomeDERP)
 	assert.Equal(t, "127.3.3.40:861", crossZonePeer.LegacyDERPString)
+}
+
+func TestMapResponseBuilder_WithPeersScrubsDefaultZoneCrossZoneDirectCandidates(t *testing.T) {
+	cfg, st, cleanup := setupConnectivityMapperTest(t)
+	defer cleanup()
+
+	cfg.Connectivity.DefaultZone = "cn"
+	untaggedNode := createConnectivityNode(t, st, "default-node", nil, "100.64.0.30", "203.0.113.30:41641")
+	globalPeer := createConnectivityNode(t, st, "global-peer", []string{"tag:global"}, "100.64.0.20", "198.51.100.20:41641")
+
+	m := &mapper{
+		cfg:   cfg,
+		state: st,
+	}
+
+	resp, err := m.NewMapResponseBuilder(untaggedNode.ID).
+		WithCapabilityVersion(1).
+		WithPeers(views.SliceOf([]types.NodeView{globalPeer.View()})).
+		Build()
+	require.NoError(t, err)
+	require.Len(t, resp.Peers, 1)
+
+	peer := resp.Peers[0]
+	assert.Empty(t, peer.Endpoints)
+	assert.Equal(t, key.DiscoPublic{}, peer.DiscoKey)
+	assert.Equal(t, 861, peer.HomeDERP)
+	assert.Equal(t, "127.3.3.40:861", peer.LegacyDERPString)
 }
 
 func TestMapResponseBuilder_WithPeerChangedPatch(t *testing.T) {
