@@ -224,8 +224,8 @@ func TestMapResponseBuilder_WithPeersScrubsCrossZoneDirectCandidates(t *testing.
 	require.NotNil(t, crossZonePeer)
 	assert.Empty(t, crossZonePeer.Endpoints)
 	assert.Equal(t, globalPeer.DiscoKey, crossZonePeer.DiscoKey)
-	assert.Equal(t, 861, crossZonePeer.HomeDERP)
-	assert.Equal(t, "127.3.3.40:861", crossZonePeer.LegacyDERPString)
+	assert.Equal(t, 901, crossZonePeer.HomeDERP)
+	assert.Equal(t, "127.3.3.40:901", crossZonePeer.LegacyDERPString)
 }
 
 func TestMapResponseBuilder_WithPeersScrubsDefaultZoneCrossZoneDirectCandidates(t *testing.T) {
@@ -251,8 +251,8 @@ func TestMapResponseBuilder_WithPeersScrubsDefaultZoneCrossZoneDirectCandidates(
 	peer := resp.Peers[0]
 	assert.Empty(t, peer.Endpoints)
 	assert.Equal(t, globalPeer.DiscoKey, peer.DiscoKey)
-	assert.Equal(t, 861, peer.HomeDERP)
-	assert.Equal(t, "127.3.3.40:861", peer.LegacyDERPString)
+	assert.Equal(t, 901, peer.HomeDERP)
+	assert.Equal(t, "127.3.3.40:901", peer.LegacyDERPString)
 }
 
 func TestMapResponseBuilder_WithPeerChangedPatch(t *testing.T) {
@@ -537,10 +537,25 @@ func createConnectivityNode(
 	node.IPv4 = ptr(netip.MustParseAddr(tailnetIP))
 	node.Endpoints = []netip.AddrPort{netip.MustParseAddrPort(endpoint)}
 	node.DiscoKey = key.NewDisco().Public()
+	node.Hostinfo = &tailcfg.Hostinfo{
+		NetInfo: &tailcfg.NetInfo{
+			PreferredDERP: preferredDERPForTags(tags),
+		},
+	}
 
 	st.PutNodeInStoreForTest(*node)
 
 	return node
+}
+
+func preferredDERPForTags(tags []string) int {
+	for _, tag := range tags {
+		if tag == "tag:global" {
+			return 901
+		}
+	}
+
+	return 861
 }
 
 func derpRegionIDs(dm *tailcfg.DERPMap) []int {

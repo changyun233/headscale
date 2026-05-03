@@ -1,7 +1,6 @@
 package mapper
 
 import (
-	"fmt"
 	"slices"
 
 	"github.com/juanfont/headscale/hscontrol/types"
@@ -71,11 +70,6 @@ func crossZonePeer(cfg types.ConnectivityConfig, requester, peer types.NodeView)
 	return requesterZone, true
 }
 
-func scrubCrossZonePeer(tn *tailcfg.Node, requesterZone types.ConnectivityZoneConfig) {
+func scrubCrossZonePeer(tn *tailcfg.Node, _ types.ConnectivityZoneConfig) {
 	tn.Endpoints = nil
-
-	if len(requesterZone.DERPRegions) > 0 {
-		tn.HomeDERP = requesterZone.DERPRegions[0]
-		tn.LegacyDERPString = fmt.Sprintf("127.3.3.40:%d", tn.HomeDERP)
-	}
 }
