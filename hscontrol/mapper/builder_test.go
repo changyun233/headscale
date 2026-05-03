@@ -250,7 +250,7 @@ func TestMapResponseBuilder_WithPeersScrubsDefaultZoneCrossZoneDirectCandidates(
 
 	peer := resp.Peers[0]
 	assert.Empty(t, peer.Endpoints)
-	assert.Equal(t, key.DiscoPublic{}, peer.DiscoKey)
+	assert.Equal(t, globalPeer.DiscoKey, peer.DiscoKey)
 	assert.Equal(t, 861, peer.HomeDERP)
 	assert.Equal(t, "127.3.3.40:861", peer.LegacyDERPString)
 }
