@@ -223,7 +223,7 @@ func TestMapResponseBuilder_WithPeersScrubsCrossZoneDirectCandidates(t *testing.
 	crossZonePeer := peers[tailcfg.NodeID(globalPeer.ID)]
 	require.NotNil(t, crossZonePeer)
 	assert.Empty(t, crossZonePeer.Endpoints)
-	assert.Equal(t, key.DiscoPublic{}, crossZonePeer.DiscoKey)
+	assert.Equal(t, globalPeer.DiscoKey, crossZonePeer.DiscoKey)
 	assert.Equal(t, 861, crossZonePeer.HomeDERP)
 	assert.Equal(t, "127.3.3.40:861", crossZonePeer.LegacyDERPString)
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/juanfont/headscale/hscontrol/types"
 	"tailscale.com/tailcfg"
-	"tailscale.com/types/key"
 )
 
 func zoneForNode(cfg types.ConnectivityConfig, node types.NodeView) (string, types.ConnectivityZoneConfig, bool) {
@@ -74,7 +73,6 @@ func crossZonePeer(cfg types.ConnectivityConfig, requester, peer types.NodeView)
 
 func scrubCrossZonePeer(tn *tailcfg.Node, requesterZone types.ConnectivityZoneConfig) {
 	tn.Endpoints = nil
-	tn.DiscoKey = key.DiscoPublic{}
 
 	if len(requesterZone.DERPRegions) > 0 {
 		tn.HomeDERP = requesterZone.DERPRegions[0]
