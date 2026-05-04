@@ -170,6 +170,50 @@ func TestMapResponseBuilder_WithDERPMapFiltersConnectivityZone(t *testing.T) {
 	assert.ElementsMatch(t, []int{901, 902}, derpRegionIDs(globalResp.DERPMap))
 }
 
+func TestMapResponseBuilder_WithDERPMapFiltersConnectivityZoneDERPNodes(t *testing.T) {
+	cfg, st, cleanup := setupConnectivityMapperTest(t)
+	defer cleanup()
+
+	cfg.Connectivity.Zones["cn"] = types.ConnectivityZoneConfig{
+		Tags:            []string{"tag:cn"},
+		DERPRegions:     []int{861},
+		DERPRegionNodes: map[int][]string{861: {"861-cn-a", "861-cn-b"}},
+	}
+	cfg.Connectivity.Zones["global"] = types.ConnectivityZoneConfig{
+		Tags:            []string{"tag:global"},
+		DERPRegions:     []int{861, 902},
+		DERPRegionNodes: map[int][]string{861: {"861-global-a"}},
+	}
+
+	cnNode := createConnectivityNode(t, st, "cn-node", []string{"tag:cn"}, "100.64.0.10", "203.0.113.10:41641")
+	globalNode := createConnectivityNode(t, st, "global-node", []string{"tag:global"}, "100.64.0.20", "198.51.100.20:41641")
+
+	m := &mapper{
+		cfg:   cfg,
+		state: st,
+	}
+
+	cnResp, err := m.NewMapResponseBuilder(cnNode.ID).
+		WithDERPMap().
+		Build()
+	require.NoError(t, err)
+	require.NotNil(t, cnResp.DERPMap)
+	require.Contains(t, cnResp.DERPMap.Regions, 861)
+	assert.ElementsMatch(t, []int{861}, derpRegionIDs(cnResp.DERPMap))
+	assert.Equal(t, []string{"861-cn-a", "861-cn-b"}, derpNodeNames(cnResp.DERPMap.Regions[861]))
+
+	globalResp, err := m.NewMapResponseBuilder(globalNode.ID).
+		WithDERPMap().
+		Build()
+	require.NoError(t, err)
+	require.NotNil(t, globalResp.DERPMap)
+	require.Contains(t, globalResp.DERPMap.Regions, 861)
+	require.Contains(t, globalResp.DERPMap.Regions, 902)
+	assert.ElementsMatch(t, []int{861, 902}, derpRegionIDs(globalResp.DERPMap))
+	assert.Equal(t, []string{"861-global-a"}, derpNodeNames(globalResp.DERPMap.Regions[861]))
+	assert.Equal(t, []string{"902a"}, derpNodeNames(globalResp.DERPMap.Regions[902]))
+}
+
 func TestMapResponseBuilder_WithDERPMapFiltersDefaultConnectivityZone(t *testing.T) {
 	cfg, st, cleanup := setupConnectivityMapperTest(t)
 	defer cleanup()
@@ -510,9 +554,32 @@ func setupConnectivityMapperTest(t testing.TB) (*types.Config, *state.State, fun
 
 	st.SetDERPMap(&tailcfg.DERPMap{
 		Regions: map[int]*tailcfg.DERPRegion{
-			861: {RegionID: 861, RegionCode: "cn", RegionName: "China"},
-			901: {RegionID: 901, RegionCode: "hk", RegionName: "Hong Kong"},
-			902: {RegionID: 902, RegionCode: "jp", RegionName: "Japan"},
+			861: {
+				RegionID:   861,
+				RegionCode: "cross-gfw",
+				RegionName: "Cross GFW",
+				Nodes: []*tailcfg.DERPNode{
+					{Name: "861-cn-a", RegionID: 861, HostName: "cn-a.example.com"},
+					{Name: "861-cn-b", RegionID: 861, HostName: "cn-b.example.com"},
+					{Name: "861-global-a", RegionID: 861, HostName: "global-a.example.com"},
+				},
+			},
+			901: {
+				RegionID:   901,
+				RegionCode: "hk",
+				RegionName: "Hong Kong",
+				Nodes: []*tailcfg.DERPNode{
+					{Name: "901a", RegionID: 901, HostName: "hk-a.example.com"},
+				},
+			},
+			902: {
+				RegionID:   902,
+				RegionCode: "jp",
+				RegionName: "Japan",
+				Nodes: []*tailcfg.DERPNode{
+					{Name: "902a", RegionID: 902, HostName: "jp-a.example.com"},
+				},
+			},
 		},
 	})
 
@@ -565,6 +632,15 @@ func derpRegionIDs(dm *tailcfg.DERPMap) []int {
 	}
 
 	return ids
+}
+
+func derpNodeNames(region *tailcfg.DERPRegion) []string {
+	names := make([]string, 0, len(region.Nodes))
+	for _, node := range region.Nodes {
+		names = append(names, node.Name)
+	}
+
+	return names
 }
 
 func ptr[T any](v T) *T {

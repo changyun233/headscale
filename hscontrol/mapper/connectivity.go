@@ -42,14 +42,19 @@ func filterDERPMapForNode(dm *tailcfg.DERPMap, cfg types.ConnectivityConfig, nod
 	}
 
 	_, zone, ok := zoneForNode(cfg, node)
-	if !ok || len(zone.DERPRegions) == 0 {
+	if !ok || (len(zone.DERPRegions) == 0 && len(zone.DERPRegionNodes) == 0) {
 		return dm
 	}
 
-	regions := make(map[int]*tailcfg.DERPRegion, len(zone.DERPRegions))
-	for _, regionID := range zone.DERPRegions {
+	regionIDs := derpRegionIDsForZone(zone)
+	regions := make(map[int]*tailcfg.DERPRegion, len(regionIDs))
+	for _, regionID := range regionIDs {
 		if region, ok := dm.Regions[regionID]; ok {
-			regions[regionID] = region
+			regionCopy := *region
+			if nodeNames, ok := zone.DERPRegionNodes[regionID]; ok && len(nodeNames) > 0 {
+				regionCopy.Nodes = filterDERPNodesByName(region.Nodes, nodeNames)
+			}
+			regions[regionID] = &regionCopy
 		}
 	}
 
@@ -57,6 +62,36 @@ func filterDERPMapForNode(dm *tailcfg.DERPMap, cfg types.ConnectivityConfig, nod
 	filtered.Regions = regions
 
 	return &filtered
+}
+
+func derpRegionIDsForZone(zone types.ConnectivityZoneConfig) []int {
+	if len(zone.DERPRegions) > 0 {
+		return zone.DERPRegions
+	}
+
+	ids := make([]int, 0, len(zone.DERPRegionNodes))
+	for id := range zone.DERPRegionNodes {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+
+	return ids
+}
+
+func filterDERPNodesByName(nodes []*tailcfg.DERPNode, names []string) []*tailcfg.DERPNode {
+	allowed := make(map[string]bool, len(names))
+	for _, name := range names {
+		allowed[name] = true
+	}
+
+	filtered := make([]*tailcfg.DERPNode, 0, len(nodes))
+	for _, node := range nodes {
+		if node != nil && allowed[node.Name] {
+			filtered = append(filtered, node)
+		}
+	}
+
+	return filtered
 }
 
 func crossZonePeer(cfg types.ConnectivityConfig, requester, peer types.NodeView) (types.ConnectivityZoneConfig, bool) {

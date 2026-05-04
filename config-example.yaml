@@ -155,9 +155,15 @@ connectivity:
   #   cn:
   #     tags: ["tag:cn"]
   #     derp_regions: [861]
+  #     # Optional: keep the same logical DERP region visible, but expose only
+  #     # the DERP nodes this zone should dial.
+  #     derp_region_nodes:
+  #       861: ["861-cn-a", "861-cn-b"]
   #   global:
   #     tags: ["tag:global"]
-  #     derp_regions: [901, 902, 903]
+  #     derp_regions: [861, 20, 7]
+  #     derp_region_nodes:
+  #       861: ["861-global-a"]
   cross_zone_direct:
     # Set to false to remove Endpoints and DiscoKey from cross-zone peers, forcing
     # them onto DERP instead of attempting direct UDP/NAT traversal.

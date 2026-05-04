@@ -351,6 +351,31 @@ func TestReadConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestConnectivityConfigWithDERPRegionNodes(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	viper.Set("connectivity.default_zone", "cn")
+	viper.Set("connectivity.zones.cn.tags", []string{"tag:cn"})
+	viper.Set("connectivity.zones.cn.derp_regions", []int{861})
+	viper.Set("connectivity.zones.cn.derp_region_nodes", map[string][]string{
+		"861": {"861-cn-a", "861-cn-b"},
+	})
+	viper.Set("connectivity.cross_zone_direct.enabled", false)
+
+	cfg, err := connectivityConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, "cn", cfg.DefaultZone)
+	assert.False(t, cfg.CrossZoneDirect.Enabled)
+	require.Contains(t, cfg.Zones, "cn")
+	assert.Equal(t, []string{"tag:cn"}, cfg.Zones["cn"].Tags)
+	assert.Equal(t, []int{861}, cfg.Zones["cn"].DERPRegions)
+	assert.Equal(t, map[int][]string{
+		861: {"861-cn-a", "861-cn-b"},
+	}, cfg.Zones["cn"].DERPRegionNodes)
+}
+
 func TestTLSConfigValidation(t *testing.T) {
 	tmpDir := t.TempDir()
 

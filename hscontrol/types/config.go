@@ -255,8 +255,9 @@ type ConnectivityConfig struct {
 }
 
 type ConnectivityZoneConfig struct {
-	Tags        []string `mapstructure:"tags"`
-	DERPRegions []int    `mapstructure:"derp_regions"`
+	Tags            []string         `mapstructure:"tags"`
+	DERPRegions     []int            `mapstructure:"derp_regions"`
+	DERPRegionNodes map[int][]string `mapstructure:"derp_region_nodes"`
 }
 
 type CrossZoneDirectConfig struct {
